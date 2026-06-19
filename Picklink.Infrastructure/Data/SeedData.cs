@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Picklink.Domain.Constants;
 using Picklink.Domain.Entities;
 using Picklink.Infrastructure.Identity;
+using Picklink.Infrastructure.Options;
 
 namespace Picklink.Infrastructure.Data;
 
@@ -25,11 +26,28 @@ public static class SeedData
 
     private static async Task SeedRolesAsync(RoleManager<Role> roleManager)
     {
+        var roleDescriptions = new Dictionary<string, string>
+        {
+            [AppRoles.Admin] = "System administrator with full platform access.",
+            [AppRoles.Owner] = "Court owner who manages venues, courts, bookings and revenue.",
+            [AppRoles.Player] = "Player who books courts, joins matches and uses community features."
+        };
+
         foreach (var roleName in AppRoles.All)
         {
-            if (!await roleManager.RoleExistsAsync(roleName))
+            var role = await roleManager.FindByNameAsync(roleName);
+            if (role is null)
             {
-                await roleManager.CreateAsync(new Role(roleName, $"{roleName} role"));
+                var createResult = await roleManager.CreateAsync(new Role(roleName, roleDescriptions[roleName]));
+                EnsureIdentitySuccess(createResult, $"Cannot seed role {roleName}.");
+                continue;
+            }
+
+            if (role.Description != roleDescriptions[roleName])
+            {
+                role.Description = roleDescriptions[roleName];
+                var updateResult = await roleManager.UpdateAsync(role);
+                EnsureIdentitySuccess(updateResult, $"Cannot update role {roleName}.");
             }
         }
     }
@@ -56,34 +74,54 @@ public static class SeedData
         IConfiguration configuration,
         CancellationToken cancellationToken)
     {
-        var password = configuration["Seed:AdminPassword"];
+        var seedOptions = ReadSeedOptions(configuration);
+        var password = seedOptions.AdminPassword;
         if (string.IsNullOrWhiteSpace(password))
         {
             return;
         }
 
-        const string email = "admin@picklink.local";
+        var email = seedOptions.AdminEmail.Trim().ToLowerInvariant();
         var adminUser = await userManager.FindByEmailAsync(email);
         if (adminUser is null)
         {
             adminUser = new User
             {
-                FullName = "Picklink Admin",
+                FullName = seedOptions.AdminFullName.Trim(),
                 Email = email,
                 UserName = email,
                 EmailConfirmed = true
             };
 
             var createResult = await userManager.CreateAsync(adminUser, password);
-            if (!createResult.Succeeded)
+            EnsureIdentitySuccess(createResult, "Cannot seed admin user.");
+        }
+        else
+        {
+            var changed = false;
+            if (adminUser.FullName != seedOptions.AdminFullName)
             {
-                throw new InvalidOperationException(string.Join("; ", createResult.Errors.Select(x => x.Description)));
+                adminUser.FullName = seedOptions.AdminFullName;
+                changed = true;
+            }
+
+            if (!adminUser.EmailConfirmed)
+            {
+                adminUser.EmailConfirmed = true;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                var updateResult = await userManager.UpdateAsync(adminUser);
+                EnsureIdentitySuccess(updateResult, "Cannot update admin user.");
             }
         }
 
         if (!await userManager.IsInRoleAsync(adminUser, AppRoles.Admin))
         {
-            await userManager.AddToRoleAsync(adminUser, AppRoles.Admin);
+            var addRoleResult = await userManager.AddToRoleAsync(adminUser, AppRoles.Admin);
+            EnsureIdentitySuccess(addRoleResult, "Cannot assign Admin role.");
         }
 
         if (!await dbContext.Admins.AnyAsync(x => x.UserId == adminUser.Id, cancellationToken))
@@ -91,5 +129,25 @@ public static class SeedData
             dbContext.Admins.Add(new Admin { UserId = adminUser.Id, Department = "System" });
             await dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    private static SeedOptions ReadSeedOptions(IConfiguration configuration)
+    {
+        return new SeedOptions
+        {
+            AdminEmail = configuration["Seed:AdminEmail"] ?? "admin@picklink.local",
+            AdminFullName = configuration["Seed:AdminFullName"] ?? "Picklink Admin",
+            AdminPassword = configuration["Seed:AdminPassword"]
+        };
+    }
+
+    private static void EnsureIdentitySuccess(IdentityResult result, string message)
+    {
+        if (result.Succeeded)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"{message} {string.Join("; ", result.Errors.Select(x => x.Description))}");
     }
 }

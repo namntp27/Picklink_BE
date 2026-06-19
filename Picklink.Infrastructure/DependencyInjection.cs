@@ -35,6 +35,12 @@ public static class DependencyInjection
                 ? maxFileBytes
                 : options.MaxFileBytes;
         });
+        services.Configure<SeedOptions>(options =>
+        {
+            options.AdminEmail = configuration["Seed:AdminEmail"] ?? options.AdminEmail;
+            options.AdminFullName = configuration["Seed:AdminFullName"] ?? options.AdminFullName;
+            options.AdminPassword = configuration["Seed:AdminPassword"];
+        });
 
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
