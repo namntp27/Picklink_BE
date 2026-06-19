@@ -15,7 +15,8 @@ public sealed class AuthController(
     IValidator<RegisterRequest> registerValidator,
     IValidator<LoginRequest> loginValidator,
     IValidator<RefreshTokenRequest> refreshTokenValidator,
-    IValidator<LogoutRequest> logoutValidator) : ControllerBase
+    IValidator<LogoutRequest> logoutValidator,
+    IValidator<ExternalLoginRequest> externalLoginValidator) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> Register(RegisterRequest request, CancellationToken cancellationToken)
@@ -63,15 +64,19 @@ public sealed class AuthController(
     }
 
     [HttpPost("google")]
-    public ActionResult<ApiResponse> Google(ExternalLoginRequest request)
+    public async Task<ActionResult<ApiResponse<AuthResponse>>> Google(ExternalLoginRequest request, CancellationToken cancellationToken)
     {
-        return StatusCode(StatusCodes.Status501NotImplemented, ApiResponse.Fail("Google login endpoint is reserved. Add Google client id/secret before enabling it."));
+        await ValidateAsync(externalLoginValidator, request, cancellationToken);
+        var result = await authService.ExternalLoginAsync("Google", request, GetIpAddress(), GetDeviceInfo(), cancellationToken);
+        return Ok(ApiResponse<AuthResponse>.Ok(result, "Logged in with Google."));
     }
 
     [HttpPost("facebook")]
-    public ActionResult<ApiResponse> Facebook(ExternalLoginRequest request)
+    public async Task<ActionResult<ApiResponse<AuthResponse>>> Facebook(ExternalLoginRequest request, CancellationToken cancellationToken)
     {
-        return StatusCode(StatusCodes.Status501NotImplemented, ApiResponse.Fail("Facebook login endpoint is reserved. Add Facebook app id/secret before enabling it."));
+        await ValidateAsync(externalLoginValidator, request, cancellationToken);
+        var result = await authService.ExternalLoginAsync("Facebook", request, GetIpAddress(), GetDeviceInfo(), cancellationToken);
+        return Ok(ApiResponse<AuthResponse>.Ok(result, "Logged in with Facebook."));
     }
 
     private string? GetIpAddress() => HttpContext.Connection.RemoteIpAddress?.ToString();

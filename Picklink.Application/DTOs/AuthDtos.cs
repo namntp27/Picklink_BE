@@ -13,7 +13,7 @@ public sealed record RefreshTokenRequest(string RefreshToken);
 
 public sealed record LogoutRequest(string RefreshToken);
 
-public sealed record ExternalLoginRequest(string AccessToken, string? Role);
+public sealed record ExternalLoginRequest(string Token, string? Role);
 
 public sealed record AuthResponse(
     string AccessToken,

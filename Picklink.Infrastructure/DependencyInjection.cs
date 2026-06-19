@@ -41,6 +41,14 @@ public static class DependencyInjection
             options.AdminFullName = configuration["Seed:AdminFullName"] ?? options.AdminFullName;
             options.AdminPassword = configuration["Seed:AdminPassword"];
         });
+        services.Configure<ExternalAuthOptions>(options =>
+        {
+            options.Google.ClientId = configuration["ExternalAuth:Google:ClientId"];
+            options.Google.TokenInfoEndpoint = configuration["ExternalAuth:Google:TokenInfoEndpoint"] ?? options.Google.TokenInfoEndpoint;
+            options.Facebook.AppId = configuration["ExternalAuth:Facebook:AppId"];
+            options.Facebook.AppSecret = configuration["ExternalAuth:Facebook:AppSecret"];
+            options.Facebook.GraphBaseUrl = configuration["ExternalAuth:Facebook:GraphBaseUrl"] ?? options.Facebook.GraphBaseUrl;
+        });
 
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
@@ -62,6 +70,7 @@ public static class DependencyInjection
         services.AddScoped<JwtTokenService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IFileStorageService, LocalFileStorageService>();
+        services.AddHttpClient<IExternalAuthVerifier, ExternalAuthVerifier>();
 
         return services;
     }

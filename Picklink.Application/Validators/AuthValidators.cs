@@ -45,3 +45,17 @@ public sealed class LogoutRequestValidator : AbstractValidator<LogoutRequest>
         RuleFor(x => x.RefreshToken).NotEmpty().MaximumLength(500);
     }
 }
+
+public sealed class ExternalLoginRequestValidator : AbstractValidator<ExternalLoginRequest>
+{
+    public ExternalLoginRequestValidator()
+    {
+        RuleFor(x => x.Token).NotEmpty().MaximumLength(5000);
+        RuleFor(x => x.Role)
+            .Must(role =>
+                string.IsNullOrWhiteSpace(role) ||
+                string.Equals(role, AppRoles.Player, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(role, AppRoles.Owner, StringComparison.OrdinalIgnoreCase))
+            .WithMessage("External login can create only Player or Owner accounts.");
+    }
+}

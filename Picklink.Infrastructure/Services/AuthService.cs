@@ -15,7 +15,8 @@ public sealed class AuthService(
     UserManager<User> userManager,
     RoleManager<Role> roleManager,
     PicklinkDbContext dbContext,
-    JwtTokenService jwtTokenService) : IAuthService
+    JwtTokenService jwtTokenService,
+    IExternalAuthVerifier externalAuthVerifier) : IAuthService
 {
     public async Task<AuthResponse> RegisterAsync(
         RegisterRequest request,
@@ -131,6 +132,127 @@ public sealed class AuthService(
         return await MapUserAsync(user);
     }
 
+    public async Task<AuthResponse> ExternalLoginAsync(
+        string provider,
+        ExternalLoginRequest request,
+        string? ipAddress,
+        string? deviceInfo,
+        CancellationToken cancellationToken = default)
+    {
+        var providerName = NormalizeExternalProvider(provider);
+        var externalUser = await externalAuthVerifier.VerifyAsync(providerName, request.Token, cancellationToken);
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var linkedLogin = await dbContext.ExternalLogins
+            .FirstOrDefaultAsync(
+                x => x.Provider == providerName && x.ProviderUserId == externalUser.ProviderUserId,
+                cancellationToken);
+
+        User? user;
+        if (linkedLogin is not null)
+        {
+            user = await userManager.FindByIdAsync(linkedLogin.UserId.ToString());
+            if (user is null)
+            {
+                throw new AppException("Linked user not found.", 404);
+            }
+
+            EnsureUserCanSignIn(user);
+            var linkedResponse = await IssueTokensAsync(user, ipAddress, deviceInfo, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return linkedResponse;
+        }
+
+        var email = externalUser.Email?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            throw new AppException("External account does not expose an email address.", 400);
+        }
+
+        user = await userManager.FindByEmailAsync(email);
+        if (user is null)
+        {
+            user = new User
+            {
+                FullName = string.IsNullOrWhiteSpace(externalUser.FullName)
+                    ? email.Split('@')[0]
+                    : externalUser.FullName.Trim(),
+                Email = email,
+                UserName = email,
+                AvatarUrl = externalUser.AvatarUrl,
+                EmailConfirmed = externalUser.EmailVerified
+            };
+
+            var createResult = await userManager.CreateAsync(user);
+            if (!createResult.Succeeded)
+            {
+                throw new AppException("Cannot create external user.", 400, createResult.Errors.ToDictionary(x => x.Code, x => x.Description));
+            }
+
+            var role = NormalizeExternalAccountRole(request.Role);
+            var addRoleResult = await userManager.AddToRoleAsync(user, role);
+            if (!addRoleResult.Succeeded)
+            {
+                throw new AppException("Cannot assign role to external user.", 400, addRoleResult.Errors.ToDictionary(x => x.Code, x => x.Description));
+            }
+
+            await CreateRoleRecordAsync(user.Id, role, cancellationToken);
+        }
+        else
+        {
+            EnsureUserCanSignIn(user);
+            var roles = await userManager.GetRolesAsync(user);
+            if (roles.Count == 0)
+            {
+                var role = NormalizeExternalAccountRole(request.Role);
+                var addRoleResult = await userManager.AddToRoleAsync(user, role);
+                if (!addRoleResult.Succeeded)
+                {
+                    throw new AppException("Cannot assign role to external user.", 400, addRoleResult.Errors.ToDictionary(x => x.Code, x => x.Description));
+                }
+
+                await CreateRoleRecordAsync(user.Id, role, cancellationToken);
+            }
+
+            var changed = false;
+            if (externalUser.EmailVerified && !user.EmailConfirmed)
+            {
+                user.EmailConfirmed = true;
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(user.AvatarUrl) && !string.IsNullOrWhiteSpace(externalUser.AvatarUrl))
+            {
+                user.AvatarUrl = externalUser.AvatarUrl;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                var updateResult = await userManager.UpdateAsync(user);
+                if (!updateResult.Succeeded)
+                {
+                    throw new AppException("Cannot update external user.", 400, updateResult.Errors.ToDictionary(x => x.Code, x => x.Description));
+                }
+            }
+        }
+
+        dbContext.ExternalLogins.Add(new ExternalLogin
+        {
+            UserId = user.Id,
+            Provider = providerName,
+            ProviderUserId = externalUser.ProviderUserId,
+            Email = email
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        var response = await IssueTokensAsync(user, ipAddress, deviceInfo, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return response;
+    }
+
     private async Task<AuthResponse> IssueTokensAsync(
         User user,
         string? ipAddress,
@@ -213,6 +335,41 @@ public sealed class AuthService(
         }
 
         throw new AppException("Only Player or Owner can self-register.", 400);
+    }
+
+    private static string NormalizeExternalAccountRole(string? role)
+    {
+        if (string.IsNullOrWhiteSpace(role))
+        {
+            return AppRoles.Player;
+        }
+
+        if (string.Equals(role, AppRoles.Owner, StringComparison.OrdinalIgnoreCase))
+        {
+            return AppRoles.Owner;
+        }
+
+        if (string.Equals(role, AppRoles.Player, StringComparison.OrdinalIgnoreCase))
+        {
+            return AppRoles.Player;
+        }
+
+        throw new AppException("External login can create only Player or Owner accounts.", 400);
+    }
+
+    private static string NormalizeExternalProvider(string provider)
+    {
+        if (string.Equals(provider, "Google", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Google";
+        }
+
+        if (string.Equals(provider, "Facebook", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Facebook";
+        }
+
+        throw new AppException("Unsupported external login provider.", 400);
     }
 
     private static void EnsureUserCanSignIn(User user)
