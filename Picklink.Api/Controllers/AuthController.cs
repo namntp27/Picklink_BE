@@ -71,14 +71,6 @@ public sealed class AuthController(
         return Ok(ApiResponse<AuthResponse>.Ok(result, "Logged in with Google."));
     }
 
-    [HttpPost("facebook")]
-    public async Task<ActionResult<ApiResponse<AuthResponse>>> Facebook(ExternalLoginRequest request, CancellationToken cancellationToken)
-    {
-        await ValidateAsync(externalLoginValidator, request, cancellationToken);
-        var result = await authService.ExternalLoginAsync("Facebook", request, GetIpAddress(), GetDeviceInfo(), cancellationToken);
-        return Ok(ApiResponse<AuthResponse>.Ok(result, "Logged in with Facebook."));
-    }
-
     private string? GetIpAddress() => HttpContext.Connection.RemoteIpAddress?.ToString();
 
     private string? GetDeviceInfo() => Request.Headers.UserAgent.ToString();

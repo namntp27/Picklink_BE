@@ -45,9 +45,6 @@ public static class DependencyInjection
         {
             options.Google.ClientId = configuration["ExternalAuth:Google:ClientId"];
             options.Google.TokenInfoEndpoint = configuration["ExternalAuth:Google:TokenInfoEndpoint"] ?? options.Google.TokenInfoEndpoint;
-            options.Facebook.AppId = configuration["ExternalAuth:Facebook:AppId"];
-            options.Facebook.AppSecret = configuration["ExternalAuth:Facebook:AppSecret"];
-            options.Facebook.GraphBaseUrl = configuration["ExternalAuth:Facebook:GraphBaseUrl"] ?? options.Facebook.GraphBaseUrl;
         });
 
         var connectionString = configuration.GetConnectionString("DefaultConnection")

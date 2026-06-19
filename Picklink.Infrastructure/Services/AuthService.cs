@@ -364,11 +364,6 @@ public sealed class AuthService(
             return "Google";
         }
 
-        if (string.Equals(provider, "Facebook", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Facebook";
-        }
-
         throw new AppException("Unsupported external login provider.", 400);
     }
 
