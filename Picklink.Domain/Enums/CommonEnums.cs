@@ -9,6 +9,22 @@ public enum EntityStatus
     Archived = 4
 }
 
+public enum VenueStatus
+{
+    Draft = 0,
+    PendingApproval = 1,
+    Published = 2,
+    Rejected = 3,
+    Suspended = 4
+}
+
+public enum CourtStatus
+{
+    Available = 1,
+    Maintenance = 2,
+    Inactive = 3
+}
+
 public enum UserStatus
 {
     Active = 1,

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Picklink.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using Picklink.Infrastructure.Data;
 namespace Picklink.Infrastructure.Migrations
 {
     [DbContext(typeof(PicklinkDbContext))]
-    partial class PicklinkDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260619170459_Phase3VenueManagement")]
+    partial class Phase3VenueManagement
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

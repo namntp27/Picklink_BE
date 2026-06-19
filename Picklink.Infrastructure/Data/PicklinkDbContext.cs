@@ -16,11 +16,14 @@ public sealed class PicklinkDbContext(DbContextOptions<PicklinkDbContext> option
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<ExternalLogin> ExternalLogins => Set<ExternalLogin>();
     public DbSet<Sport> Sports => Set<Sport>();
+    public DbSet<AdministrativeProvince> AdministrativeProvinces => Set<AdministrativeProvince>();
+    public DbSet<AdministrativeWard> AdministrativeWards => Set<AdministrativeWard>();
     public DbSet<Venue> Venues => Set<Venue>();
+    public DbSet<VenueAmenity> VenueAmenities => Set<VenueAmenity>();
+    public DbSet<VenueImage> VenueImages => Set<VenueImage>();
+    public DbSet<VenueOpeningHour> VenueOpeningHours => Set<VenueOpeningHour>();
     public DbSet<Court> Courts => Set<Court>();
     public DbSet<CourtImage> CourtImages => Set<CourtImage>();
-    public DbSet<CourtFeature> CourtFeatures => Set<CourtFeature>();
-    public DbSet<CourtSchedule> CourtSchedules => Set<CourtSchedule>();
     public DbSet<CourtBlockedSlot> CourtBlockedSlots => Set<CourtBlockedSlot>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<BookingParticipant> BookingParticipants => Set<BookingParticipant>();
@@ -143,28 +146,76 @@ public sealed class PicklinkDbContext(DbContextOptions<PicklinkDbContext> option
             entity.Property(x => x.Slug).HasMaxLength(120).IsRequired();
         });
 
+        builder.Entity<AdministrativeProvince>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.CodeName).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.DivisionType).HasMaxLength(80).IsRequired();
+        });
+
+        builder.Entity<AdministrativeWard>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.CodeName).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.DivisionType).HasMaxLength(80).IsRequired();
+            entity.HasOne(x => x.Province)
+                .WithMany(x => x.Wards)
+                .HasForeignKey(x => x.ProvinceId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         builder.Entity<Venue>(entity =>
         {
             entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
-            entity.Property(x => x.Address).HasMaxLength(300).IsRequired();
-            entity.Property(x => x.City).HasMaxLength(120).IsRequired();
-            entity.Property(x => x.District).HasMaxLength(120);
-            entity.Property(x => x.Ward).HasMaxLength(120);
+            entity.Property(x => x.Description).HasMaxLength(2000);
+            entity.Property(x => x.StreetAddress).HasMaxLength(300).IsRequired();
+            entity.Property(x => x.PhoneNumber).HasMaxLength(30).IsRequired();
+            entity.Property(x => x.RejectionReason).HasMaxLength(500);
             entity.Property(x => x.Latitude).HasPrecision(10, 7);
             entity.Property(x => x.Longitude).HasPrecision(10, 7);
             entity.HasOne<User>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Province).WithMany().HasForeignKey(x => x.ProvinceId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Ward).WithMany().HasForeignKey(x => x.WardId).OnDelete(DeleteBehavior.Restrict);
         });
+
+        builder.Entity<VenueAmenity>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.HasOne(x => x.Venue).WithMany(x => x.Amenities).HasForeignKey(x => x.VenueId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<VenueImage>(entity =>
+        {
+            entity.Property(x => x.Url).HasMaxLength(500).IsRequired();
+            entity.HasOne(x => x.Venue).WithMany(x => x.Images).HasForeignKey(x => x.VenueId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<VenueOpeningHour>()
+            .HasOne(x => x.Venue)
+            .WithMany(x => x.OpeningHours)
+            .HasForeignKey(x => x.VenueId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.Entity<Court>(entity =>
         {
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.Code).HasMaxLength(50).IsRequired();
             entity.Property(x => x.PricePerHour).HasPrecision(18, 2);
-            entity.HasOne(x => x.Venue).WithMany(x => x.Courts).HasForeignKey(x => x.VenueId);
+            entity.HasOne(x => x.Venue).WithMany(x => x.Courts).HasForeignKey(x => x.VenueId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(x => x.Sport).WithMany().HasForeignKey(x => x.SportId).OnDelete(DeleteBehavior.Restrict);
         });
 
-        builder.Entity<CourtImage>().Property(x => x.Url).HasMaxLength(500).IsRequired();
-        builder.Entity<CourtFeature>().Property(x => x.Name).HasMaxLength(120).IsRequired();
+        builder.Entity<CourtImage>(entity =>
+        {
+            entity.Property(x => x.Url).HasMaxLength(500).IsRequired();
+            entity.HasOne(x => x.Court).WithMany(x => x.Images).HasForeignKey(x => x.CourtId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CourtBlockedSlot>(entity =>
+        {
+            entity.Property(x => x.Reason).HasMaxLength(500);
+            entity.HasOne(x => x.Court).WithMany(x => x.BlockedSlots).HasForeignKey(x => x.CourtId).OnDelete(DeleteBehavior.Cascade);
+        });
 
         builder.Entity<Booking>(entity =>
         {
@@ -244,7 +295,12 @@ public sealed class PicklinkDbContext(DbContextOptions<PicklinkDbContext> option
         });
         builder.Entity<ExternalLogin>().HasIndex(x => new { x.Provider, x.ProviderUserId }).IsUnique();
         builder.Entity<Sport>().HasIndex(x => x.Slug).IsUnique();
-        builder.Entity<Court>().HasIndex(x => new { x.VenueId, x.Name });
+        builder.Entity<AdministrativeProvince>().HasIndex(x => x.Code).IsUnique();
+        builder.Entity<AdministrativeWard>().HasIndex(x => x.Code).IsUnique();
+        builder.Entity<AdministrativeWard>().HasIndex(x => new { x.ProvinceId, x.Name });
+        builder.Entity<Venue>().HasIndex(x => new { x.OwnerId, x.Status });
+        builder.Entity<VenueOpeningHour>().HasIndex(x => new { x.VenueId, x.DayOfWeek }).IsUnique();
+        builder.Entity<Court>().HasIndex(x => new { x.VenueId, x.Code }).IsUnique();
         builder.Entity<Booking>().HasIndex(x => new { x.CourtId, x.StartTime, x.EndTime });
         builder.Entity<Post>().HasIndex(x => x.CreatedAt);
     }
