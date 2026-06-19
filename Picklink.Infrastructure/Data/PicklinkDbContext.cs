@@ -8,7 +8,7 @@ using Picklink.Infrastructure.Identity;
 namespace Picklink.Infrastructure.Data;
 
 public sealed class PicklinkDbContext(DbContextOptions<PicklinkDbContext> options)
-    : IdentityDbContext<User, Role, Guid>(options)
+    : IdentityDbContext<User, Role, Guid, IdentityUserClaim<Guid>, UserRole, IdentityUserLogin<Guid>, IdentityRoleClaim<Guid>, IdentityUserToken<Guid>>(options)
 {
     public DbSet<Player> Players => Set<Player>();
     public DbSet<Owner> Owners => Set<Owner>();
@@ -85,7 +85,17 @@ public sealed class PicklinkDbContext(DbContextOptions<PicklinkDbContext> option
             entity.Property(x => x.Description).HasMaxLength(250);
         });
 
-        builder.Entity<IdentityUserRole<Guid>>().ToTable("UserRoles");
+        builder.Entity<UserRole>(entity =>
+        {
+            entity.ToTable("UserRoles");
+            entity.HasKey(x => new { x.UserId, x.RoleId });
+            entity.HasOne(x => x.User)
+                .WithMany(x => x.UserRoles)
+                .HasForeignKey(x => x.UserId);
+            entity.HasOne(x => x.Role)
+                .WithMany(x => x.UserRoles)
+                .HasForeignKey(x => x.RoleId);
+        });
         builder.Entity<IdentityUserClaim<Guid>>().ToTable("UserClaims");
         builder.Entity<IdentityUserLogin<Guid>>().ToTable("UserLogins");
         builder.Entity<IdentityRoleClaim<Guid>>().ToTable("RoleClaims");
@@ -96,31 +106,31 @@ public sealed class PicklinkDbContext(DbContextOptions<PicklinkDbContext> option
     {
         builder.Entity<Player>()
             .HasOne<User>()
-            .WithOne()
+            .WithOne(x => x.Player)
             .HasForeignKey<Player>(x => x.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Entity<Owner>()
             .HasOne<User>()
-            .WithOne()
+            .WithOne(x => x.Owner)
             .HasForeignKey<Owner>(x => x.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Entity<Admin>()
             .HasOne<User>()
-            .WithOne()
+            .WithOne(x => x.Admin)
             .HasForeignKey<Admin>(x => x.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Entity<RefreshToken>()
             .HasOne<User>()
-            .WithMany()
+            .WithMany(x => x.RefreshTokens)
             .HasForeignKey(x => x.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Entity<ExternalLogin>()
             .HasOne<User>()
-            .WithMany()
+            .WithMany(x => x.ExternalLogins)
             .HasForeignKey(x => x.UserId)
             .OnDelete(DeleteBehavior.Cascade);
     }
@@ -221,7 +231,17 @@ public sealed class PicklinkDbContext(DbContextOptions<PicklinkDbContext> option
         builder.Entity<Player>().HasIndex(x => x.UserId).IsUnique();
         builder.Entity<Owner>().HasIndex(x => x.UserId).IsUnique();
         builder.Entity<Admin>().HasIndex(x => x.UserId).IsUnique();
-        builder.Entity<RefreshToken>().HasIndex(x => x.TokenHash).IsUnique();
+        builder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasIndex(x => new { x.UserId, x.ExpiresAt });
+            entity.Property(x => x.TokenHash).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.ReplacedByTokenHash).HasMaxLength(128);
+            entity.Property(x => x.DeviceInfo).HasMaxLength(500);
+            entity.Property(x => x.IpAddress).HasMaxLength(64);
+            entity.Property(x => x.RevokedByIp).HasMaxLength(64);
+            entity.Property(x => x.RevokeReason).HasMaxLength(200);
+        });
         builder.Entity<ExternalLogin>().HasIndex(x => new { x.Provider, x.ProviderUserId }).IsUnique();
         builder.Entity<Sport>().HasIndex(x => x.Slug).IsUnique();
         builder.Entity<Court>().HasIndex(x => new { x.VenueId, x.Name });

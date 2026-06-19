@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Picklink.Domain.Entities;
 using Picklink.Domain.Enums;
 
 namespace Picklink.Infrastructure.Identity;
@@ -17,4 +18,10 @@ public sealed class User : IdentityUser<Guid>
     public DateTimeOffset? UpdatedAt { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public bool IsDeleted { get; set; }
+    public Player? Player { get; set; }
+    public Owner? Owner { get; set; }
+    public Admin? Admin { get; set; }
+    public ICollection<UserRole> UserRoles { get; set; } = [];
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
+    public ICollection<ExternalLogin> ExternalLogins { get; set; } = [];
 }

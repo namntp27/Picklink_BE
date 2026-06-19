@@ -95,15 +95,13 @@ public sealed class AuthService(
             throw new AppException("User not found.", 404);
         }
 
-        refreshToken.RevokedAt = DateTimeOffset.UtcNow;
-        var response = await IssueTokensAsync(user, ipAddress, deviceInfo, cancellationToken);
-        refreshToken.ReplacedByTokenHash = jwtTokenService.HashToken(response.RefreshToken);
+        var response = await IssueTokensAsync(user, ipAddress, deviceInfo, cancellationToken, refreshToken);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return response;
     }
 
-    public async Task LogoutAsync(LogoutRequest request, CancellationToken cancellationToken = default)
+    public async Task LogoutAsync(LogoutRequest request, string? ipAddress, CancellationToken cancellationToken = default)
     {
         var tokenHash = jwtTokenService.HashToken(request.RefreshToken);
         var refreshToken = await dbContext.RefreshTokens
@@ -114,7 +112,7 @@ public sealed class AuthService(
             return;
         }
 
-        refreshToken.RevokedAt ??= DateTimeOffset.UtcNow;
+        refreshToken.Revoke(ipAddress, "Logout");
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -133,12 +131,15 @@ public sealed class AuthService(
         User user,
         string? ipAddress,
         string? deviceInfo,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RefreshToken? tokenToReplace = null)
     {
         var roles = await userManager.GetRolesAsync(user);
         var accessToken = jwtTokenService.GenerateAccessToken(user, roles);
         var refreshToken = jwtTokenService.GenerateRefreshToken();
         var refreshTokenHash = jwtTokenService.HashToken(refreshToken);
+
+        tokenToReplace?.Revoke(ipAddress, "Rotated", refreshTokenHash);
 
         dbContext.RefreshTokens.Add(new RefreshToken
         {
@@ -149,7 +150,10 @@ public sealed class AuthService(
             DeviceInfo = deviceInfo
         });
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if (tokenToReplace is null)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
 
         return new AuthResponse(
             accessToken.Token,

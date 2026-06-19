@@ -41,7 +41,7 @@ public sealed class AuthController(
     [HttpPost("logout")]
     public async Task<ActionResult<ApiResponse>> Logout(LogoutRequest request, CancellationToken cancellationToken)
     {
-        await authService.LogoutAsync(request, cancellationToken);
+        await authService.LogoutAsync(request, GetIpAddress(), cancellationToken);
         return Ok(ApiResponse.Ok("Logged out successfully."));
     }
 
