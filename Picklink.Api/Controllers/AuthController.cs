@@ -13,7 +13,9 @@ public sealed class AuthController(
     IAuthService authService,
     ICurrentUserService currentUserService,
     IValidator<RegisterRequest> registerValidator,
-    IValidator<LoginRequest> loginValidator) : ControllerBase
+    IValidator<LoginRequest> loginValidator,
+    IValidator<RefreshTokenRequest> refreshTokenValidator,
+    IValidator<LogoutRequest> logoutValidator) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> Register(RegisterRequest request, CancellationToken cancellationToken)
@@ -34,6 +36,7 @@ public sealed class AuthController(
     [HttpPost("refresh-token")]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> RefreshToken(RefreshTokenRequest request, CancellationToken cancellationToken)
     {
+        await ValidateAsync(refreshTokenValidator, request, cancellationToken);
         var result = await authService.RefreshTokenAsync(request, GetIpAddress(), GetDeviceInfo(), cancellationToken);
         return Ok(ApiResponse<AuthResponse>.Ok(result, "Token refreshed."));
     }
@@ -41,6 +44,7 @@ public sealed class AuthController(
     [HttpPost("logout")]
     public async Task<ActionResult<ApiResponse>> Logout(LogoutRequest request, CancellationToken cancellationToken)
     {
+        await ValidateAsync(logoutValidator, request, cancellationToken);
         await authService.LogoutAsync(request, GetIpAddress(), cancellationToken);
         return Ok(ApiResponse.Ok("Logged out successfully."));
     }

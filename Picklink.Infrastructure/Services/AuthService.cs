@@ -5,6 +5,7 @@ using Picklink.Application.DTOs;
 using Picklink.Application.Interfaces;
 using Picklink.Domain.Constants;
 using Picklink.Domain.Entities;
+using Picklink.Domain.Enums;
 using Picklink.Infrastructure.Data;
 using Picklink.Infrastructure.Identity;
 
@@ -28,17 +29,19 @@ public sealed class AuthService(
             throw new AppException("Role is not configured.", 400);
         }
 
-        var existingUser = await userManager.FindByEmailAsync(request.Email);
+        var email = request.Email.Trim().ToLowerInvariant();
+        var existingUser = await userManager.FindByEmailAsync(email);
         if (existingUser is not null)
         {
             throw new AppException("Email already exists.", 409);
         }
 
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var user = new User
         {
             FullName = request.FullName.Trim(),
-            Email = request.Email.Trim(),
-            UserName = request.Email.Trim(),
+            Email = email,
+            UserName = email,
             PhoneNumber = request.PhoneNumber?.Trim()
         };
 
@@ -51,7 +54,10 @@ public sealed class AuthService(
         await userManager.AddToRoleAsync(user, role);
         await CreateRoleRecordAsync(user.Id, role, cancellationToken);
 
-        return await IssueTokensAsync(user, ipAddress, deviceInfo, cancellationToken);
+        var response = await IssueTokensAsync(user, ipAddress, deviceInfo, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return response;
     }
 
     public async Task<AuthResponse> LoginAsync(
@@ -60,16 +66,13 @@ public sealed class AuthService(
         string? deviceInfo,
         CancellationToken cancellationToken = default)
     {
-        var user = await userManager.FindByEmailAsync(request.Email.Trim());
+        var user = await userManager.FindByEmailAsync(request.Email.Trim().ToLowerInvariant());
         if (user is null || !await userManager.CheckPasswordAsync(user, request.Password))
         {
             throw new AppException("Invalid email or password.", 401);
         }
 
-        if (user.IsDeleted)
-        {
-            throw new AppException("Account is no longer available.", 403);
-        }
+        EnsureUserCanSignIn(user);
 
         return await IssueTokensAsync(user, ipAddress, deviceInfo, cancellationToken);
     }
@@ -94,6 +97,7 @@ public sealed class AuthService(
         {
             throw new AppException("User not found.", 404);
         }
+        EnsureUserCanSignIn(user);
 
         var response = await IssueTokensAsync(user, ipAddress, deviceInfo, cancellationToken, refreshToken);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -158,6 +162,7 @@ public sealed class AuthService(
         return new AuthResponse(
             accessToken.Token,
             refreshToken,
+            "Bearer",
             accessToken.ExpiresAt,
             await MapUserAsync(user));
     }
@@ -171,6 +176,7 @@ public sealed class AuthService(
             user.Email ?? string.Empty,
             user.PhoneNumber,
             user.AvatarUrl,
+            user.Status.ToString(),
             roles.ToArray());
     }
 
@@ -207,5 +213,18 @@ public sealed class AuthService(
         }
 
         throw new AppException("Only Player or Owner can self-register.", 400);
+    }
+
+    private static void EnsureUserCanSignIn(User user)
+    {
+        if (user.IsDeleted)
+        {
+            throw new AppException("Account is no longer available.", 403);
+        }
+
+        if (user.Status is UserStatus.Suspended or UserStatus.Locked)
+        {
+            throw new AppException("Account is not allowed to sign in.", 403);
+        }
     }
 }

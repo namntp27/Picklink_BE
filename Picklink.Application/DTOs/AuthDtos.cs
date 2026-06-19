@@ -18,6 +18,7 @@ public sealed record ExternalLoginRequest(string AccessToken, string? Role);
 public sealed record AuthResponse(
     string AccessToken,
     string RefreshToken,
+    string TokenType,
     DateTimeOffset ExpiresAt,
     UserResponse User);
 
@@ -27,4 +28,5 @@ public sealed record UserResponse(
     string Email,
     string? PhoneNumber,
     string? AvatarUrl,
+    string Status,
     IReadOnlyList<string> Roles);
