@@ -40,6 +40,9 @@ public static class DependencyInjection
             options.AdminEmail = configuration["Seed:AdminEmail"] ?? options.AdminEmail;
             options.AdminFullName = configuration["Seed:AdminFullName"] ?? options.AdminFullName;
             options.AdminPassword = configuration["Seed:AdminPassword"];
+            options.OwnerEmail = configuration["Seed:OwnerEmail"] ?? options.OwnerEmail;
+            options.OwnerFullName = configuration["Seed:OwnerFullName"] ?? options.OwnerFullName;
+            options.OwnerPassword = configuration["Seed:OwnerPassword"];
         });
         services.Configure<ExternalAuthOptions>(options =>
         {
