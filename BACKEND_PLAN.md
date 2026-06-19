@@ -116,6 +116,16 @@ Roles:
 - `Player`: nguoi choi, dat san, tim doi thu, social, club, tournament.
 - `Guest`: nguoi chua dang nhap. De xuat khong luu role nay trong DB; day la anonymous user.
 
+Thiet ke user:
+
+- Chi co 1 entity user chinh la `User`, map xuong bang `Users`.
+- `Admin`, `Owner`, `Player` la role gan cho user, khong nen tao 3 bang dang nhap rieng vi se bi trung email/password/token.
+- Neu tung role can thong tin nghiep vu rieng thi tao bang 1-1 dat ten dung role:
+  - `Player` cho nguoi choi.
+  - `Owner` cho chu san.
+  - `Admin` cho quan tri vien/noi bo.
+- `Guest` la anonymous user chua dang nhap, khong tao record rieng trong DB.
+
 Policy de xuat:
 
 - Public: xem danh sach san, chi tiet san, bai post public, giai dau public.
@@ -127,9 +137,23 @@ Policy de xuat:
 
 ### Identity
 
-- `ApplicationUser`
-  - Id, FullName, Email, PhoneNumber, AvatarUrl, SkillLevel, Role, Status
-  - CreatedAt, UpdatedAt, DeletedAt
+- `User`
+  - Id, FullName, Email, PhoneNumber, AvatarUrl, DateOfBirth, Gender, City, District, Ward, Status
+  - CreatedAt, UpdatedAt, DeletedAt, IsDeleted
+  - Day la entity user chinh cua he thong. Moi tai khoan Admin/Owner/Player deu la 1 `User` + role.
+- `Role`
+  - Id, Name, Description
+- `UserRole`
+  - UserId, RoleId
+- `Player`
+  - UserId, SkillLevel, PreferredSports, Bio, TotalBookings, TotalMatches
+  - 1-1 voi `User`, chi tao khi user co role `Player`.
+- `Owner`
+  - UserId, BusinessName, TaxCode, VerificationStatus, BankAccountName, BankAccountNumber, BankName
+  - 1-1 voi `User`, chi tao khi user co role `Owner`.
+- `Admin`
+  - UserId, Department, PermissionNote
+  - 1-1 voi `User`, chi tao khi can luu thong tin noi bo cho role `Admin`.
 - `RefreshToken`
   - UserId, TokenHash, ExpiresAt, RevokedAt, DeviceInfo, IpAddress
 - `ExternalLogin`
@@ -224,6 +248,7 @@ Gan cho hau het entity:
 ## 7. Quan he chinh
 
 - User Owner 1-n Venue.
+- User 1-1 Player/Owner/Admin tuy theo role.
 - Venue 1-n Court.
 - Court n-1 Sport.
 - Court 1-n Booking.
