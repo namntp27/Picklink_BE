@@ -27,7 +27,8 @@ public sealed class BookingsController(PicklinkDbContext dbContext, ICurrentUser
 
         var court = await dbContext.Courts
             .Include(x => x.Venue)
-            .FirstOrDefaultAsync(x => x.Id == request.CourtId && x.Status == EntityStatus.Active, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == request.CourtId && !x.IsDeleted &&
+                x.Status == CourtStatus.Available && x.Venue!.Status == VenueStatus.Published, cancellationToken);
 
         if (court is null)
         {
